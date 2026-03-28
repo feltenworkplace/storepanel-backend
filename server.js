@@ -49,6 +49,21 @@ db.connect(err => {
         if (err) console.error("Erro ao verificar/criar tabela:", err);
         else console.log("Estrutura do banco de dados verificada com sucesso!");
     });
+
+    const adminEmail = 'tomasfeltel10@gmail.com';
+    const adminSenhaRaw = 'Ften@512';
+
+    const checkAdmin = "SELECT * FROM usuarios WHERE email = ?";
+    db.query(checkAdmin, [adminEmail], async (err, results) => {
+    if (results.length === 0) {
+            const hash = await bcrypt.hash(adminSenhaRaw, 10);
+            const insertAdmin = "INSERT INTO usuarios (nome, email, senha, plano, limites) VALUES (?, ?, ?, ?, ?)";
+            db.query(insertAdmin, ['Admin Tomás', adminEmail, hash, 'LEGEND', '999'], (err) => {
+                if (err) console.error("Erro ao criar admin:", err);
+                else console.log("ADMIN CRIADO COM SUCESSO! Agora você pode logar.");
+         });
+        }
+    });
 });
 
 // ROTA: VERIFICAR STATUS DO PAGAMENTO
