@@ -33,7 +33,7 @@ db.connect(err => {
     }
     console.log('Conectado ao MySQL com sucesso na Nuvem!');
 
-    // CRIA A TABELA AUTOMATICAMENTE SE NÃO EXISTIR
+    // ATENÇÃO: Vou usar o comando para garantir que a tabela tenha a coluna 'limites'
     const createTableQuery = `
         CREATE TABLE IF NOT EXISTS usuarios (
             id INT AUTO_INCREMENT PRIMARY KEY,
@@ -44,9 +44,10 @@ db.connect(err => {
             limites TEXT
         )
     `;
+    
     db.query(createTableQuery, (err) => {
         if (err) console.error("Erro ao criar tabela:", err);
-        else console.log("Tabela 'usuarios' verificada/pronta.");
+        else console.log("Tabela 'usuarios' está pronta e com a coluna limites!");
     });
 });
 
