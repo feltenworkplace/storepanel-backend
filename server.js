@@ -55,13 +55,19 @@ db.connect(err => {
 
     const checkAdmin = "SELECT * FROM usuarios WHERE email = ?";
     db.query(checkAdmin, [adminEmail], async (err, results) => {
-    if (results.length === 0) {
+        if (err) return console.error("Erro ao checar admin:", err);
+
+        if (results.length === 0) {
             const hash = await bcrypt.hash(adminSenhaRaw, 10);
             const insertAdmin = "INSERT INTO usuarios (nome, email, senha, plano, limites) VALUES (?, ?, ?, ?, ?)";
-            db.query(insertAdmin, ['Admin Tomás', adminEmail, hash, 'LEGEND', '999'], (err) => {
+        
+            // Define o limite de 1 loja para o plano VIP (Starter)
+            const limitesVIP = JSON.stringify({ stores: 1, items: 10 });
+
+            db.query(insertAdmin, ['Admin Tomás', adminEmail, hash, 'VIP', limitesVIP], (err) => {
                 if (err) console.error("Erro ao criar admin:", err);
-                else console.log("ADMIN CRIADO COM SUCESSO! Agora você pode logar.");
-         });
+                else console.log("ADMIN VIP CRIADO COM SUCESSO! Verde esmeralda ativado.");
+            });
         }
     });
 });
