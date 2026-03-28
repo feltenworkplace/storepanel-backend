@@ -58,7 +58,7 @@ db.connect(err => {
     if (results.length === 0) {
             const hash = await bcrypt.hash(adminSenhaRaw, 10);
             const insertAdmin = "INSERT INTO usuarios (nome, email, senha, plano, limites) VALUES (?, ?, ?, ?, ?)";
-            db.query(insertAdmin, ['Admin Tomás', adminEmail, hash, 'LEGEND', '999'], (err) => {
+            db.query(insertAdmin, ['Admin Tomás', adminEmail, hash, 'VIP', '999'], (err) => {
                 if (err) console.error("Erro ao criar admin:", err);
                 else console.log("ADMIN CRIADO COM SUCESSO! Agora você pode logar.");
          });
