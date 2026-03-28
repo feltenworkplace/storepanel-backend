@@ -33,21 +33,26 @@ db.connect(err => {
     }
     console.log('Conectado ao MySQL com sucesso na Nuvem!');
 
-    // ATENÇÃO: Vou usar o comando para garantir que a tabela tenha a coluna 'limites'
-    const createTableQuery = `
-        CREATE TABLE IF NOT EXISTS usuarios (
-            id INT AUTO_INCREMENT PRIMARY KEY,
-            nome VARCHAR(100) NOT NULL,
-            email VARCHAR(100) UNIQUE NOT NULL,
-            senha VARCHAR(255) NOT NULL,
-            plano VARCHAR(50) DEFAULT 'VIP',
-            limites TEXT
-        )
-    `;
-    
-    db.query(createTableQuery, (err) => {
-        if (err) console.error("Erro ao criar tabela:", err);
-        else console.log("Tabela 'usuarios' está pronta e com a coluna limites!");
+    // PASSO 1: APAGA A TABELA ANTIGA (SÓ VAMOS RODAR ISSO UMA VEZ PARA LIMPAR)
+    db.query("DROP TABLE IF EXISTS usuarios", (err) => {
+        if (err) console.error("Erro ao apagar tabela:", err);
+        
+        // PASSO 2: CRIA A TABELA NOVA COM A COLUNA 'LIMITES' CERTA
+        const createTableQuery = `
+            CREATE TABLE usuarios (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                nome VARCHAR(100) NOT NULL,
+                email VARCHAR(100) UNIQUE NOT NULL,
+                senha VARCHAR(255) NOT NULL,
+                plano VARCHAR(50) DEFAULT 'VIP',
+                limites TEXT
+            )
+        `;
+        
+        db.query(createTableQuery, (err) => {
+            if (err) console.error("Erro ao criar tabela nova:", err);
+            else console.log("Tabela 'usuarios' REFEITA com sucesso!");
+        });
     });
 });
 
