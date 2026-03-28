@@ -76,9 +76,9 @@ app.get('/check-payment/:id', async (req, res) => {
 app.post('/generate-pix', async (req, res) => {
     const { nome, email, cpf, plano } = req.body;
 
-    let valorCobrado = 29.90; 
-    if (plano === 'Pro') valorCobrado = 49.90;
-    if (plano === 'Legend') valorCobrado = 99.90;
+    let valorCobrado = 14.90; 
+    if (plano === 'Pro') valorCobrado = 29.90;
+    if (plano === 'Legend') valorCobrado = 59.90;
 
     try {
         const body = {
