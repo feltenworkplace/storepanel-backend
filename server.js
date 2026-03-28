@@ -56,6 +56,22 @@ db.connect(err => {
     });
 });
 
+// ROTA: VERIFICAR STATUS DO PAGAMENTO
+app.get('/check-payment/:id', async (req, res) => {
+    try {
+        const id = req.params.id;
+        const response = await payment.get({ id });
+        
+        // Se o status for 'approved', o pagamento caiu!
+        if (response.status === 'approved') {
+            return res.json({ approved: true });
+        }
+        res.json({ approved: false });
+    } catch (error) {
+        res.status(500).json({ error: "Erro ao consultar pagamento" });
+    }
+});
+
 // --- ROTA: GERAR PIX (CHECKOUT) ---
 app.post('/generate-pix', async (req, res) => {
     const { nome, email, cpf, plano } = req.body;
