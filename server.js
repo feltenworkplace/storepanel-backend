@@ -90,16 +90,18 @@ app.get('/check-payment/:id', async (req, res) => {
 
 // --- ROTA: GERAR PIX (CHECKOUT) ---
 app.post('/generate-pix', async (req, res) => {
-    const { nome, email, cpf, plano } = req.body;
+    // 1. Lemos a variável 'plan' (que é exatamente a que o checkout envia)
+    const { nome, email, cpf, plan } = req.body;
 
-    let valorCobrado = 14.90; 
-    if (plano === 'Pro') valorCobrado = 29.90;
-    if (plano === 'Legend') valorCobrado = 59.90;
+    // 2. Definimos os preços exatos por questões de segurança no servidor
+    let valorCobrado = 14.90; // Valor padrão (VIP)
+    if (plan === 'PRO') valorCobrado = 29.90;
+    if (plan === 'LEGEND') valorCobrado = 59.90;
 
     try {
         const body = {
             transaction_amount: valorCobrado,
-            description: `Assinatura ProTech - Plano ${plano}`,
+            description: `Assinatura ProTech - Plano ${plan || 'VIP'}`,
             payment_method_id: 'pix',
             payer: {
                 email: email,
