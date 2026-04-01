@@ -176,6 +176,30 @@ app.post('/login', (req, res) => {
     });
 });
 
+// --- ROTA: ESQUECI A SENHA ---
+app.post('/forgot-password', (req, res) => {
+    const { email } = req.body;
+
+    // Procura o usuário no banco de dados
+    const sql = "SELECT id FROM usuarios WHERE email = ?";
+    db.query(sql, [email], (err, result) => {
+        if (err) {
+            console.error("Erro ao buscar email:", err);
+            return res.status(500).json({ success: false });
+        }
+
+        if (result.length > 0) {
+            // AQUI VOCÊ PODE IMPLEMENTAR O ENVIO DE EMAIL REAIS NO FUTURO
+            // Exemplo: usar a biblioteca 'nodemailer' para mandar o link de reset
+            console.log(`Solicitação de recuperação de senha para: ${email}`);
+        }
+
+        // Por segurança (Anti-Hacker), devolvemos SEMPRE sucesso.
+        // Assim, ninguém consegue descobrir se um e-mail existe ou não testando na sua página.
+        res.status(200).json({ success: true, message: "Solicitação processada." });
+    });
+});
+
 // --- INICIALIZAÇÃO DO SERVIDOR ---
 // O Render exige process.env.PORT para saber em qual porta ligar o servidor
 const PORT = process.env.PORT || 3000;
