@@ -4,6 +4,19 @@ const bcrypt = require('bcrypt');
 const cors = require('cors');
 const { MercadoPagoConfig, Payment } = require('mercadopago');
 
+// --- NOVAS BIBLIOTECAS PARA E-MAIL ---
+const nodemailer = require('nodemailer');
+const crypto = require('crypto');
+
+// --- CONFIGURAÇÃO DO E-MAIL PARA TESTE LOCAL ---
+const transporter = nodemailer.createTransport({
+    service: 'gmail',
+    auth: {
+        user: process.env.EMAIL_USER,
+        pass: process.env.EMAIL_PASS
+    }
+});
+
 // --- CONFIGURAÇÃO MERCADO PAGO ---
 const client = new MercadoPagoConfig({ accessToken: process.env.MP_ACCESS_TOKEN });
 const payment = new Payment(client);
@@ -176,12 +189,11 @@ app.post('/login', (req, res) => {
     });
 });
 
-// --- ROTA: ESQUECI A SENHA ---
+// --- ROTA: ESQUECI A SENHA (ENVIO REAL DE E-MAIL) ---
 app.post('/forgot-password', (req, res) => {
     const { email } = req.body;
 
-    // Procura o usuário no banco de dados
-    const sql = "SELECT id FROM usuarios WHERE email = ?";
+    const sql = "SELECT id, nome FROM usuarios WHERE email = ?";
     db.query(sql, [email], (err, result) => {
         if (err) {
             console.error("Erro ao buscar email:", err);
@@ -189,13 +201,47 @@ app.post('/forgot-password', (req, res) => {
         }
 
         if (result.length > 0) {
-            // AQUI VOCÊ PODE IMPLEMENTAR O ENVIO DE EMAIL REAIS NO FUTURO
-            // Exemplo: usar a biblioteca 'nodemailer' para mandar o link de reset
-            console.log(`Solicitação de recuperação de senha para: ${email}`);
+            const usuario = result[0];
+            const token = crypto.randomBytes(20).toString('hex');
+            const expiracao = new Date(Date.now() + 3600000); 
+
+            const updateSql = "UPDATE usuarios SET reset_token = ?, reset_token_expires = ? WHERE id = ?";
+            db.query(updateSql, [token, expiracao, usuario.id], (updateErr) => {
+                if (updateErr) {
+                    console.error("Erro ao salvar token:", updateErr);
+                    return; 
+                }
+
+                // URL provisória para testes locais
+                const resetLink = `http://127.0.0.1:5500/reset-password.html?token=${token}`;
+
+                const mailOptions = {
+                    from: `"ProTech Lab" <SEU_EMAIL_AQUI@gmail.com>`, // Não se esqueça de colocar o seu e-mail aqui também!
+                    to: email,
+                    subject: 'Recuperação de Senha - ProTech Lab',
+                    html: `
+                        <div style="font-family: 'Inter', sans-serif; max-w: 600px; margin: 0 auto; background-color: #0b0b0b; color: #fff; padding: 40px; border-radius: 20px; border: 1px solid rgba(212, 175, 55, 0.2);">
+                            <h2 style="color: #D4AF37; margin-top: 0;">Recuperação de Senha</h2>
+                            <p style="color: #ccc; font-size: 15px;">Olá, <b>${usuario.nome}</b>,</p>
+                            <p style="color: #ccc; font-size: 15px; line-height: 1.6;">Recebemos um pedido para redefinir a sua senha no painel da ProTech Lab.</p>
+                            <p style="color: #ccc; font-size: 15px; line-height: 1.6;">Clique no botão abaixo para criar uma nova senha. <b>Este link é válido por 1 hora.</b></p>
+                            
+                            <div style="text-align: center; margin: 40px 0;">
+                                <a href="${resetLink}" style="display: inline-block; background-color: #D4AF37; color: #000; padding: 15px 30px; text-decoration: none; font-weight: 800; border-radius: 12px; letter-spacing: 1px; text-transform: uppercase; font-size: 14px;">Redefinir Minha Senha</a>
+                            </div>
+                            
+                            <p style="margin-top: 30px; font-size: 12px; color: #666; text-align: center; border-top: 1px solid rgba(255,255,255,0.05); padding-top: 15px;">Se não foi você que solicitou, pode ignorar este e-mail em segurança.</p>
+                        </div>
+                    `
+                };
+
+                transporter.sendMail(mailOptions, (mailErr, info) => {
+                    if (mailErr) console.error("Erro ao enviar email:", mailErr);
+                    else console.log("Email enviado com sucesso para:", email);
+                });
+            });
         }
 
-        // Por segurança (Anti-Hacker), devolvemos SEMPRE sucesso.
-        // Assim, ninguém consegue descobrir se um e-mail existe ou não testando na sua página.
         res.status(200).json({ success: true, message: "Solicitação processada." });
     });
 });
