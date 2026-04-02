@@ -8,9 +8,10 @@ const { MercadoPagoConfig, Payment } = require('mercadopago');
 const nodemailer = require('nodemailer');
 const crypto = require('crypto');
 
-// --- CONFIGURAÇÃO DO E-MAIL PARA TESTE LOCAL ---
 const transporter = nodemailer.createTransport({
-    service: 'gmail',
+    host: 'smtp.gmail.com',
+    port: 465,
+    secure: true, // Garante que a conexão é encriptada (SSL)
     auth: {
         user: process.env.EMAIL_USER,
         pass: process.env.EMAIL_PASS
