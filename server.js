@@ -8,16 +8,6 @@ const { MercadoPagoConfig, Payment } = require('mercadopago');
 const nodemailer = require('nodemailer');
 const crypto = require('crypto');
 
-const transporter = nodemailer.createTransport({
-    host: 'smtp.gmail.com',
-    port: 465,
-    secure: true, // Garante que a conexão é encriptada (SSL)
-    auth: {
-        user: process.env.EMAIL_USER,
-        pass: process.env.EMAIL_PASS
-    }
-});
-
 // --- CONFIGURAÇÃO MERCADO PAGO ---
 const client = new MercadoPagoConfig({ accessToken: process.env.MP_ACCESS_TOKEN });
 const payment = new Payment(client);
@@ -190,7 +180,7 @@ app.post('/login', (req, res) => {
     });
 });
 
-// --- ROTA: ESQUECI A SENHA (ENVIO REAL DE E-MAIL) ---
+// --- ROTA: ESQUECI A SENHA (VIA BREVO API - FURA BLOQUEIO) ---
 app.post('/forgot-password', (req, res) => {
     const { email } = req.body;
 
@@ -213,15 +203,15 @@ app.post('/forgot-password', (req, res) => {
                     return; 
                 }
 
-                // URL provisória para testes locais
+                // URL para testes locais (quando mandar pro GitHub, troque pelo link real do seu site!)
                 const resetLink = `http://127.0.0.1:5500/reset-password.html?token=${token}`;
 
-                const mailOptions = {
-                    from: `"ProTech Lab" <SEU_EMAIL_AQUI@gmail.com>`, // Não se esqueça de colocar o seu e-mail aqui também!
-                    to: email,
-                    subject: 'Recuperação de Senha - ProTech Lab',
-                    html: `
-                        <div style="font-family: 'Inter', sans-serif; max-w: 600px; margin: 0 auto; background-color: #0b0b0b; color: #fff; padding: 40px; border-radius: 20px; border: 1px solid rgba(212, 175, 55, 0.2);">
+                const emailData = {
+                    sender: { name: "ProTech Lab", email: "protech.labmail@gmail.com" }, // ATENÇÃO: Tem de ser o e-mail que usou para criar a conta no Brevo
+                    to: [{ email: email }],
+                    subject: "Recuperação de Senha - ProTech Lab",
+                    htmlContent: `
+                        <div style="font-family: 'Inter', sans-serif; max-width: 600px; margin: 0 auto; background-color: #0b0b0b; color: #fff; padding: 40px; border-radius: 20px; border: 1px solid rgba(212, 175, 55, 0.2);">
                             <h2 style="color: #D4AF37; margin-top: 0;">Recuperação de Senha</h2>
                             <p style="color: #ccc; font-size: 15px;">Olá, <b>${usuario.nome}</b>,</p>
                             <p style="color: #ccc; font-size: 15px; line-height: 1.6;">Recebemos um pedido para redefinir a sua senha no painel da ProTech Lab.</p>
@@ -236,10 +226,19 @@ app.post('/forgot-password', (req, res) => {
                     `
                 };
 
-                transporter.sendMail(mailOptions, (mailErr, info) => {
-                    if (mailErr) console.error("Erro ao enviar email:", mailErr);
-                    else console.log("Email enviado com sucesso para:", email);
-                });
+                // AQUI É A MÁGICA QUE FURA O BLOQUEIO: Enviando via HTTP
+                fetch('https://api.brevo.com/v3/smtp/email', {
+                    method: 'POST',
+                    headers: {
+                        'accept': 'application/json',
+                        'api-key': process.env.BREVO_API_KEY,
+                        'content-type': 'application/json'
+                    },
+                    body: JSON.stringify(emailData)
+                })
+                .then(resposta => resposta.json())
+                .then(dados => console.log("E-mail disparado pelo Brevo com sucesso!", dados))
+                .catch(erro => console.error("Erro na API do Brevo:", erro));
             });
         }
 
