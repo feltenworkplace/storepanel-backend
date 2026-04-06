@@ -203,8 +203,7 @@ app.post('/forgot-password', (req, res) => {
                     return; 
                 }
 
-                // URL para testes locais (quando mandar pro GitHub, troque pelo link real do seu site!)
-                const resetLink = `http://127.0.0.1:5500/reset-password.html?token=${token}`;
+                const resetLink = `https://feltenworkplace.github.io/protech-storepanel/reset-password.html?token=${token}`;
 
                 const emailData = {
                     sender: { name: "ProTech Lab", email: "protech.labmail@gmail.com" }, // ATENÇÃO: Tem de ser o e-mail que usou para criar a conta no Brevo
