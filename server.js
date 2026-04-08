@@ -281,15 +281,6 @@ app.post('/reset-password', async (req, res) => {
     });
 });
 
-// --- INICIALIZAÇÃO DO SERVIDOR ---
-// O Render exige process.env.PORT para saber em qual porta ligar o servidor
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-    console.log(`------------------------------------------`);
-    console.log(`PROtech Server ONLINE - Porta ${PORT}`);
-    console.log(`------------------------------------------`);
-});
-
 // --- ROTA: GERAR PIX (MERCADO PAGO) ---
 app.post('/create-pix', async (req, res) => {
     const { lojaToken, cliente, valor, itens } = req.body;
@@ -338,4 +329,13 @@ app.post('/create-pix', async (req, res) => {
         console.error("Erro no Mercado Pago:", error);
         res.status(500).json({ success: false, message: "Erro ao gerar o PIX no Mercado Pago. Verifique se o Token é válido." });
     }
+});
+
+// --- INICIALIZAÇÃO DO SERVIDOR ---
+// O Render exige process.env.PORT para saber em qual porta ligar o servidor
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => {
+    console.log(`------------------------------------------`);
+    console.log(`PROtech Server ONLINE - Porta ${PORT}`);
+    console.log(`------------------------------------------`);
 });
