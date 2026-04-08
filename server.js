@@ -289,3 +289,53 @@ app.listen(PORT, () => {
     console.log(`PROtech Server ONLINE - Porta ${PORT}`);
     console.log(`------------------------------------------`);
 });
+
+// --- ROTA: GERAR PIX (MERCADO PAGO) ---
+app.post('/create-pix', async (req, res) => {
+    const { lojaToken, cliente, valor, itens } = req.body;
+
+    // 1. Verifica se a loja configurou o token
+    if (!lojaToken) {
+        return res.status(400).json({ success: false, message: "A loja não possui um Token do Mercado Pago configurado." });
+    }
+
+    try {
+        // 2. Configura o Mercado Pago com o TOKEN DA LOJA ESPECÍFICA!
+        // É isso que garante que o dinheiro vai para a conta do seu cliente, e não para a sua.
+        const client = new MercadoPagoConfig({ accessToken: lojaToken });
+        const payment = new Payment(client);
+
+        // 3. Limpa o CPF (O Mercado Pago só aceita números)
+        const cpfLimpo = cliente.cpf.replace(/\D/g, '');
+
+        // 4. Monta os dados da cobrança
+        const paymentData = {
+            transaction_amount: Number(valor),
+            description: `Pedido ProTech (${itens.length} itens)`,
+            payment_method_id: 'pix',
+            payer: {
+                email: cliente.email,
+                first_name: cliente.nome,
+                identification: {
+                    type: 'CPF',
+                    number: cpfLimpo
+                }
+            }
+        };
+
+        // 5. Envia o pedido para o Mercado Pago
+        const result = await payment.create({ body: paymentData });
+
+        // 6. Retorna o QR Code (Imagem) e o código Copia e Cola para o site
+        res.json({
+            success: true,
+            qr_code: result.point_of_interaction.transaction_data.qr_code,
+            qr_code_base64: result.point_of_interaction.transaction_data.qr_code_base64,
+            payment_id: result.id
+        });
+
+    } catch (error) {
+        console.error("Erro no Mercado Pago:", error);
+        res.status(500).json({ success: false, message: "Erro ao gerar o PIX no Mercado Pago. Verifique se o Token é válido." });
+    }
+});
