@@ -245,6 +245,42 @@ app.post('/forgot-password', (req, res) => {
     });
 });
 
+// --- ROTA: REDEFINIR A SENHA (GRAVAR A NOVA SENHA) ---
+app.post('/reset-password', async (req, res) => {
+    const { token, novaSenha } = req.body;
+
+    // 1. Procura o utilizador que tem este token exato e verifica se ainda não expirou
+    const sqlBusca = "SELECT id FROM usuarios WHERE reset_token = ? AND reset_token_expires > NOW()";
+    
+    db.query(sqlBusca, [token], async (err, result) => {
+        if (err) return res.status(500).json({ success: false, message: "Erro no servidor." });
+        
+        if (result.length === 0) {
+            return res.status(400).json({ success: false, message: "O link expirou ou é inválido. Peça um novo e-mail." });
+        }
+
+        const usuarioId = result[0].id;
+
+        try {
+            // 2. Encripta a senha nova
+            const salt = await bcrypt.genSalt(10);
+            const senhaHash = await bcrypt.hash(novaSenha, salt);
+
+            // 3. Atualiza a senha no banco e apaga o token (para não ser usado 2 vezes)
+            const sqlAtualiza = "UPDATE usuarios SET senha = ?, reset_token = NULL, reset_token_expires = NULL WHERE id = ?";
+            
+            db.query(sqlAtualiza, [senhaHash, usuarioId], (updateErr) => {
+                if (updateErr) return res.status(500).json({ success: false, message: "Erro ao salvar a senha." });
+                
+                res.json({ success: true, message: "Senha atualizada com sucesso!" });
+            });
+
+        } catch (error) {
+            res.status(500).json({ success: false, message: "Erro ao encriptar a senha." });
+        }
+    });
+});
+
 // --- INICIALIZAÇÃO DO SERVIDOR ---
 // O Render exige process.env.PORT para saber em qual porta ligar o servidor
 const PORT = process.env.PORT || 3000;
