@@ -281,6 +281,27 @@ app.post('/reset-password', async (req, res) => {
     });
 });
 
+// --- ROTA: VERIFICAR STATUS DO PAGAMENTO REAL ---
+app.post('/check-payment', async (req, res) => {
+    const { paymentId, lojaToken } = req.body;
+    
+    try {
+        // Usa a chave exata do dono da loja para ir ao Mercado Pago
+        const client = new MercadoPagoConfig({ accessToken: lojaToken || process.env.MP_ACCESS_TOKEN });
+        const payment = new Payment(client);
+        
+        const response = await payment.get({ id: paymentId });
+        
+        // Se o banco disser que está aprovado, a gente avisa o site!
+        if (response.status === 'approved') {
+            return res.json({ approved: true });
+        }
+        res.json({ approved: false });
+    } catch (error) {
+        res.json({ approved: false, error: "Aguardando confirmação do banco..." });
+    }
+});
+
 // --- ROTA: GERAR PIX (MERCADO PAGO) ---
 app.post('/create-pix', async (req, res) => {
     const { lojaToken, cliente, valor, itens } = req.body;
