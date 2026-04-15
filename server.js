@@ -102,6 +102,9 @@ app.post('/generate-pix', async (req, res) => {
     if (plan === 'PRO') valorCobrado = 29.90;
     if (plan === 'LEGEND') valorCobrado = 59.90;
 
+    // 3. LIMPEZA DO CPF: Remove pontos e traços (Obrigatório para o Mercado Pago)
+    const cpfLimpo = cpf ? cpf.replace(/\D/g, '') : '';
+
     try {
         const body = {
             transaction_amount: valorCobrado,
@@ -112,7 +115,7 @@ app.post('/generate-pix', async (req, res) => {
                 first_name: nome,
                 identification: {
                     type: 'CPF',
-                    number: cpf
+                    number: cpfLimpo // Usa o CPF limpo aqui!
                 }
             }
         };
