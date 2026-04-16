@@ -37,7 +37,6 @@ db.connect(err => {
     }
     console.log('Conectado ao MySQL com sucesso na Nuvem!');
 
-    // AGORA SÓ CRIA SE NÃO EXISTIR (SEM O DROP TABLE)
     const createTableQuery = `
         CREATE TABLE IF NOT EXISTS usuarios (
             id INT AUTO_INCREMENT PRIMARY KEY,
@@ -51,7 +50,14 @@ db.connect(err => {
     
     db.query(createTableQuery, (err) => {
         if (err) console.error("Erro ao verificar/criar tabela:", err);
-        else console.log("Estrutura do banco de dados verificada com sucesso!");
+        else {
+            console.log("Estrutura base verificada!");
+            // MÁGICA: Adiciona a coluna 'lojas' se ela ainda não existir
+            db.query("ALTER TABLE usuarios ADD COLUMN lojas LONGTEXT", (altErr) => {
+                if (altErr && altErr.code !== 'ER_DUP_FIELDNAME') console.error("Erro ao adicionar coluna lojas:", altErr);
+                else console.log("Pronto para guardar lojas na nuvem!");
+            });
+        }
     });
 
     const adminEmail = 'tomasfeltel10@gmail.com';
@@ -353,6 +359,29 @@ app.post('/create-pix', async (req, res) => {
         console.error("Erro no Mercado Pago:", error);
         res.status(500).json({ success: false, message: "Erro ao gerar o PIX no Mercado Pago. Verifique se o Token é válido." });
     }
+});
+
+// --- ROTA: PEGAR LOJAS DA NUVEM ---
+app.post('/get-stores', (req, res) => {
+    const { email } = req.body;
+    db.query("SELECT lojas FROM usuarios WHERE email = ?", [email], (err, results) => {
+        if (err) return res.status(500).json({ success: false, error: err });
+        if (results.length === 0) return res.status(404).json({ success: false, message: "Usuário não encontrado" });
+        
+        // Retorna as lojas (se estiver vazio, retorna um array vazio)
+        res.json({ success: true, lojas: results[0].lojas ? JSON.parse(results[0].lojas) : [] });
+    });
+});
+
+// --- ROTA: SALVAR LOJAS NA NUVEM (SYNC) ---
+app.post('/sync-stores', (req, res) => {
+    const { email, stores } = req.body;
+    const storesStr = JSON.stringify(stores);
+    
+    db.query("UPDATE usuarios SET lojas = ? WHERE email = ?", [storesStr, email], (err, result) => {
+        if (err) return res.status(500).json({ success: false, error: err });
+        res.json({ success: true });
+    });
 });
 
 // --- INICIALIZAÇÃO DO SERVIDOR ---
