@@ -166,25 +166,35 @@ app.post('/signup', async (req, res) => {
     }
 });
 
-// --- ROTA: LOGIN ---
+// --- ROTA: LOGIN (AIVEN) ---
 app.post('/login', (req, res) => {
+    // CORREÇÃO: Agora o backend procura por 'senha' em vez de 'password'
     const { email, senha } = req.body;
+    
+    // Garantia de segurança (caso venha password de algum outro lugar)
+    const senhaRecebida = senha || req.body.password;
 
-    const sql = "SELECT * FROM usuarios WHERE email = ?";
-    db.query(sql, [email], async (err, result) => {
-        if (err) return res.status(500).send(err);
-        if (result.length === 0) return res.status(404).send("Usuário não encontrado!");
+    const query = 'SELECT * FROM usuarios WHERE email = ?';
+    db.query(query, [email], (err, results) => {
+        if (err) return res.status(500).json({ success: false, message: 'Erro no servidor.' });
+        if (results.length === 0) return res.status(401).json({ success: false, message: 'Usuário não encontrado.' });
 
-        const usuario = result[0];
-        const senhaValida = await bcrypt.compare(senha, usuario.senha);
-        
-        if (!senhaValida) return res.status(401).send("Senha incorreta!");
+        const user = results[0];
+        bcrypt.compare(senhaRecebida, user.senha, (err, isMatch) => {
+            if (err) return res.status(500).json({ success: false, message: 'Erro ao verificar senha.' });
+            if (!isMatch) return res.status(401).json({ success: false, message: 'E-mail ou senha incorretos.' });
 
-        res.json({
-            id: usuario.id,
-            nome: usuario.nome,
-            plan: usuario.plano,
-            limits: typeof usuario.limites === 'string' ? JSON.parse(usuario.limites) : usuario.limites
+            // Devolvemos todos os dados do banco para o LocalStorage
+            res.json({ 
+                success: true, 
+                message: 'Login bem-sucedido!',
+                user: {
+                    nome: user.nome,
+                    email: user.email,
+                    plano: user.plano,
+                    limites: user.limites
+                }
+            });
         });
     });
 });
