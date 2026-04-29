@@ -468,10 +468,10 @@ app.get('/api/store/:slug', (req, res) => {
     });
 });
 
-// --- INICIALIZAÇÃO DO SERVIDOR ---
-// O Render exige process.env.PORT para saber em qual porta ligar o servidor
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
+
+const PORT = process.env.PORT || 10000; 
+
+app.listen(PORT, '0.0.0.0', () => {
     console.log(`------------------------------------------`);
     console.log(`PROtech Server ONLINE - Porta ${PORT}`);
     console.log(`------------------------------------------`);
