@@ -3,7 +3,7 @@ const mysql = require('mysql2');
 const bcrypt = require('bcrypt');
 const cors = require('cors');
 const { MercadoPagoConfig, Payment } = require('mercadopago');
-const { Rcon } = require('rcon-client'); // <-- NOSSO MOTOR RCON AQUI!
+const dgram = require('dgram'); // <-- NOSSO MOTOR RCON AQUI
 
 // --- NOVAS BIBLIOTECAS PARA E-MAIL ---
 const nodemailer = require('nodemailer');
@@ -84,52 +84,79 @@ db.connect(err => {
 });
 
 // =======================================================
-// MOTOR DE ENTREGA RCON (PROTECH LAB)
+// MOTOR DE ENTREGA RCON FIVE M (UDP NATIVO - PROTECH LAB)
 // =======================================================
-async function executarComandosRcon(serverIp, serverPort, rconPassword, comandos) {
-    try {
-        console.log(`[ProTech RCON] Conectando ao servidor ${serverIp}:${serverPort}...`);
-        
-        const rcon = await Rcon.connect({
-            host: serverIp,
-            port: parseInt(serverPort),
-            password: rconPassword,
-            timeout: 5000 // Desiste após 5 segundos se o servidor do cliente estiver offline
+function sendRconCommand(ip, port, password, command) {
+    return new Promise((resolve, reject) => {
+        const client = dgram.createSocket('udp4');
+        const rconPort = parseInt(port);
+
+        // O comando RCON no FiveM precisa ter esse cabeçalho hexadecimal específico
+        const prefix = Buffer.from([0xFF, 0xFF, 0xFF, 0xFF]);
+        const cmdString = `rcon ${password} ${command}`;
+        const packet = Buffer.concat([prefix, Buffer.from(cmdString, 'utf8')]);
+
+        let isResolved = false;
+
+        client.on('message', (msg) => {
+            // O FiveM responde com um cabeçalho + "print " e depois a resposta real
+            const response = msg.toString('utf8').substring(4).replace(/^print\n/, '').trim();
+            isResolved = true;
+            client.close();
+            resolve(response);
         });
 
-        console.log(`[ProTech RCON] Sucesso! Autenticado no servidor do cliente.`);
+        client.on('error', (err) => {
+            if (!isResolved) {
+                isResolved = true;
+                client.close();
+                reject(err);
+            }
+        });
 
-        // Dispara todos os comandos (Ex: se ele comprou 2 carros e 1 VIP)
+        client.send(packet, 0, packet.length, rconPort, ip, (err) => {
+            if (err) {
+                if (!isResolved) {
+                    isResolved = true;
+                    client.close();
+                    reject(err);
+                }
+            }
+        });
+
+        // Timeout de segurança (5 segundos)
+        setTimeout(() => {
+            if (!isResolved) {
+                isResolved = true;
+                client.close();
+                // No FiveM, muitos comandos (como dar dinheiro) não retornam mensagem, 
+                // então assumimos sucesso se não der erro e esgotar o tempo.
+                resolve("Comando enviado (Sem resposta do console)"); 
+            }
+        }, 5000);
+    });
+}
+
+async function executarComandosRcon(serverIp, serverPort, rconPassword, comandos) {
+    try {
+        console.log(`[ProTech RCON] Iniciando envio UDP para ${serverIp}:${serverPort}...`);
+        
         for (let cmd of comandos) {
             console.log(`[ProTech RCON] Disparando: /${cmd}`);
-            const resposta = await rcon.send(cmd);
+            // No FiveM o RCON não precisa de "/" na frente. O Pinggy passa a porta certinha.
+            const resposta = await sendRconCommand(serverIp, serverPort, rconPassword, cmd);
             console.log(`[ProTech RCON] Resposta in-game: ${resposta}`);
+            
+            // Pausa de 500ms entre comandos para o servidor respirar
+            await new Promise(r => setTimeout(r, 500)); 
         }
 
-        await rcon.end();
         return true;
     } catch (error) {
         console.error(`[ProTech RCON ERRO] Falha na entrega:`, error.message);
         return false;
     }
 }
-
-// ROTA PARA O SITE DISPARAR A ENTREGA APÓS O PIX
-app.post('/delivery', async (req, res) => {
-    const { ip, port, password, commands } = req.body;
-    
-    if (!ip || !port || !password || !commands || commands.length === 0) {
-        return res.status(400).json({ success: false, message: "Dados de servidor ou comandos ausentes." });
-    }
-
-    const sucesso = await executarComandosRcon(ip, port, password, commands);
-    
-    if (sucesso) {
-        res.json({ success: true, message: "Itens entregues no jogo com sucesso!" });
-    } else {
-        res.status(500).json({ success: false, message: "Servidor offline ou dados RCON incorretos." });
-    }
-});
 // =======================================================
 
 // ROTA: VERIFICAR STATUS DO PAGAMENTO
