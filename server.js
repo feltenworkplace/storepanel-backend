@@ -91,7 +91,7 @@ async function executarComandosViaHttp(serverIp, serverPort, protechKey, comando
         
         // A porta padrão para o servidor FiveM escutar HTTP é a mesma do jogo (30120)
         // O Pinggy vai redirecionar certinho.
-        const url = `http://${serverIp}:${serverPort}/protech_delivery`;
+        const url = `http://${serverIp}:${serverPort}/protech_connector/delivery`;
 
         for (let cmd of comandos) {
             console.log(`[ProTech API] Disparando comando: /${cmd}`);
