@@ -3,7 +3,6 @@ const mysql = require('mysql2');
 const bcrypt = require('bcrypt');
 const cors = require('cors');
 const { MercadoPagoConfig, Payment } = require('mercadopago');
-const dgram = require('dgram'); // <-- NOSSO MOTOR RCON AQUI
 
 // --- NOVAS BIBLIOTECAS PARA E-MAIL ---
 const nodemailer = require('nodemailer');
@@ -84,60 +83,6 @@ db.connect(err => {
 });
 
 // =======================================================
-// MOTOR DE ENTREGA RCON FIVE M (UDP NATIVO - PROTECH LAB)
-// =======================================================
-function sendRconCommand(ip, port, password, command) {
-    return new Promise((resolve, reject) => {
-        const client = dgram.createSocket('udp4');
-        const rconPort = parseInt(port);
-
-        // O comando RCON no FiveM precisa ter esse cabeçalho hexadecimal específico
-        const prefix = Buffer.from([0xFF, 0xFF, 0xFF, 0xFF]);
-        const cmdString = `rcon ${password} ${command}`;
-        const packet = Buffer.concat([prefix, Buffer.from(cmdString, 'utf8')]);
-
-        let isResolved = false;
-
-        client.on('message', (msg) => {
-            // O FiveM responde com um cabeçalho + "print " e depois a resposta real
-            const response = msg.toString('utf8').substring(4).replace(/^print\n/, '').trim();
-            isResolved = true;
-            client.close();
-            resolve(response);
-        });
-
-        client.on('error', (err) => {
-            if (!isResolved) {
-                isResolved = true;
-                client.close();
-                reject(err);
-            }
-        });
-
-        client.send(packet, 0, packet.length, rconPort, ip, (err) => {
-            if (err) {
-                if (!isResolved) {
-                    isResolved = true;
-                    client.close();
-                    reject(err);
-                }
-            }
-        });
-
-        // Timeout de segurança (5 segundos)
-        setTimeout(() => {
-            if (!isResolved) {
-                isResolved = true;
-                client.close();
-                // No FiveM, muitos comandos (como dar dinheiro) não retornam mensagem, 
-                // então assumimos sucesso se não der erro e esgotar o tempo.
-                resolve("Comando enviado (Sem resposta do console)"); 
-            }
-        }, 5000);
-    });
-}
-
-// =======================================================
 // MOTOR DE ENTREGA VIA HTTP/REST (PROTECH LAB)
 // =======================================================
 async function executarComandosViaHttp(serverIp, serverPort, protechKey, comandos) {
@@ -146,7 +91,7 @@ async function executarComandosViaHttp(serverIp, serverPort, protechKey, comando
         
         // A porta padrão para o servidor FiveM escutar HTTP é a mesma do jogo (30120)
         // O Pinggy vai redirecionar certinho.
-        const url = `http://${serverIp}:${serverPort}/protech_connector/delivery`;
+        const url = `http://${serverIp}:${serverPort}/protech_delivery`;
 
         for (let cmd of comandos) {
             console.log(`[ProTech API] Disparando comando: /${cmd}`);
