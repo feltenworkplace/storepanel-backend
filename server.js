@@ -137,23 +137,44 @@ function sendRconCommand(ip, port, password, command) {
     });
 }
 
-async function executarComandosRcon(serverIp, serverPort, rconPassword, comandos) {
+// =======================================================
+// MOTOR DE ENTREGA VIA HTTP/REST (PROTECH LAB)
+// =======================================================
+async function executarComandosViaHttp(serverIp, serverPort, protechKey, comandos) {
     try {
-        console.log(`[ProTech RCON] Iniciando envio UDP para ${serverIp}:${serverPort}...`);
+        console.log(`[ProTech API] Iniciando envio HTTP para ${serverIp}:${serverPort}...`);
         
+        // A porta padrão para o servidor FiveM escutar HTTP é a mesma do jogo (30120)
+        // O Pinggy vai redirecionar certinho.
+        const url = `http://${serverIp}:${serverPort}/protech_connector/delivery`;
+
         for (let cmd of comandos) {
-            console.log(`[ProTech RCON] Disparando: /${cmd}`);
-            // No FiveM o RCON não precisa de "/" na frente. O Pinggy passa a porta certinha.
-            const resposta = await sendRconCommand(serverIp, serverPort, rconPassword, cmd);
-            console.log(`[ProTech RCON] Resposta in-game: ${resposta}`);
+            console.log(`[ProTech API] Disparando comando: /${cmd}`);
             
-            // Pausa de 500ms entre comandos para o servidor respirar
+            const resposta = await fetch(url, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${protechKey}` // Segurança!
+                },
+                body: JSON.stringify({ command: cmd })
+            });
+
+            if (!resposta.ok) {
+                console.error(`[ProTech API ERRO] O servidor retornou status: ${resposta.status}`);
+                return false;
+            }
+            
+            const data = await resposta.json();
+            console.log(`[ProTech API] Resposta in-game:`, data);
+            
+            // Pausa de 500ms entre comandos
             await new Promise(r => setTimeout(r, 500)); 
         }
 
         return true;
     } catch (error) {
-        console.error(`[ProTech RCON ERRO] Falha na entrega:`, error.message);
+        console.error(`[ProTech API ERRO] Falha na entrega HTTP:`, error.message);
         return false;
     }
 }
@@ -162,19 +183,19 @@ async function executarComandosRcon(serverIp, serverPort, rconPassword, comandos
 // ROTA PARA O SITE DISPARAR A ENTREGA 
 // =======================================================
 app.post('/delivery', async (req, res) => {
-    const { ip, port, password, commands } = req.body;
+    // Note que agora pedimos o "token", e não "password"
+    const { ip, port, token, commands } = req.body;
     
-    if (!ip || !port || !password || !commands || commands.length === 0) {
+    if (!ip || !port || !token || !commands || commands.length === 0) {
         return res.status(400).json({ success: false, message: "Dados de servidor ou comandos ausentes." });
     }
 
-    // Chama a nossa função UDP nativa nova!
-    const sucesso = await executarComandosRcon(ip, port, password, commands);
+    const sucesso = await executarComandosViaHttp(ip, port, token, commands);
     
     if (sucesso) {
         res.json({ success: true, message: "Itens entregues no jogo com sucesso!" });
     } else {
-        res.status(500).json({ success: false, message: "Servidor offline ou dados RCON incorretos." });
+        res.status(500).json({ success: false, message: "Servidor offline ou dados API incorretos." });
     }
 });
 // =======================================================
