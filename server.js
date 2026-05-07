@@ -157,6 +157,26 @@ async function executarComandosRcon(serverIp, serverPort, rconPassword, comandos
         return false;
     }
 }
+
+// =======================================================
+// ROTA PARA O SITE DISPARAR A ENTREGA 
+// =======================================================
+app.post('/delivery', async (req, res) => {
+    const { ip, port, password, commands } = req.body;
+    
+    if (!ip || !port || !password || !commands || commands.length === 0) {
+        return res.status(400).json({ success: false, message: "Dados de servidor ou comandos ausentes." });
+    }
+
+    // Chama a nossa função UDP nativa nova!
+    const sucesso = await executarComandosRcon(ip, port, password, commands);
+    
+    if (sucesso) {
+        res.json({ success: true, message: "Itens entregues no jogo com sucesso!" });
+    } else {
+        res.status(500).json({ success: false, message: "Servidor offline ou dados RCON incorretos." });
+    }
+});
 // =======================================================
 
 // ROTA: VERIFICAR STATUS DO PAGAMENTO
