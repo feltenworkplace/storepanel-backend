@@ -53,10 +53,10 @@ db.connect(err => {
         if (err) console.error("Erro ao verificar/criar tabela:", err);
         else {
             console.log("Estrutura base verificada!");
-            // MÁGICA: Adiciona a coluna 'lojas' se ela ainda não existir
-            db.query("ALTER TABLE usuarios ADD COLUMN lojas LONGTEXT", (altErr) => {
-                if (altErr && altErr.code !== 'ER_DUP_FIELDNAME') console.error("Erro ao adicionar coluna lojas:", altErr);
-                else console.log("Pronto para guardar lojas na nuvem!");
+            // MÁGICA SUPREMA: Força o banco de dados a expandir o limite de 64KB para 4GB!
+            db.query("ALTER TABLE usuarios MODIFY COLUMN lojas LONGTEXT", (err) => {
+                if (err) console.error("Erro ao expandir o limite do banco:", err);
+                else console.log("Banco de dados expandido para LONGTEXT com sucesso! (Pode mandar os GIFs gigantes!)");
             });
         }
     });
