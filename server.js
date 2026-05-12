@@ -53,11 +53,11 @@ db.connect(err => {
         if (err) console.error("Erro ao verificar/criar tabela:", err);
         else {
             console.log("Estrutura base verificada!");
-            // MÁGICA SUPREMA: Força o banco de dados a expandir o limite de 64KB para 4GB!
+
             db.query("ALTER TABLE usuarios ADD COLUMN lojas LONGTEXT", (err) => {
-                // Se der erro avisando que a coluna já existe, nós forçamos a expansão dela!
+                // Se a coluna já existir, o Aiven avisa. Então nós usamos o MODIFY para expandir!
                 if (err && err.code === 'ER_DUP_FIELDNAME') {
-                    db.query("ALTER TABLE usuarios CHANGE lojas lojas LONGTEXT", (err2) => {
+                    db.query("ALTER TABLE usuarios MODIFY lojas LONGTEXT", (err2) => {
                         if (err2) console.error("Erro ao expandir para LONGTEXT:", err2);
                         else console.log("Banco de dados expandido para LONGTEXT com sucesso!");
                     });
