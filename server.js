@@ -471,22 +471,27 @@ app.post('/sync-stores', (req, res) => {
 app.get('/api/store/:slug', (req, res) => {
     const slug = req.params.slug;
     
-    // Procura em todas as lojas de todos os usuários
     db.query("SELECT lojas FROM usuarios", (err, results) => {
         if (err) return res.status(500).json({ success: false, message: "Erro no banco." });
 
         for (let row of results) {
             if (row.lojas) {
-                const lojasDoUsuario = JSON.parse(row.lojas);
-                const lojaEncontrada = lojasDoUsuario.find(s => s.slug === slug);
-                
-                if (lojaEncontrada) {
-                    return res.json({ success: true, store: lojaEncontrada });
+                try {
+                    // MÁGICA: Tenta ler o JSON. Se estiver quebrado, ele pula e continua procurando!
+                    const lojasDoUsuario = JSON.parse(row.lojas);
+                    const lojaEncontrada = lojasDoUsuario.find(s => s.slug === slug);
+                    
+                    if (lojaEncontrada) {
+                        return res.json({ success: true, store: lojaEncontrada });
+                    }
+                } catch (e) {
+                    // Loga o erro mas não deixa o servidor travar ou retornar vazio
+                    console.error("Detectado JSON corrompido, pulando para a próxima linha...");
+                    continue; 
                 }
             }
         }
         
-        // Se o loop acabar e não achar nenhuma loja com esse link:
         res.status(404).json({ success: false, message: "Loja não encontrada" });
     });
 });
