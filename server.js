@@ -3,7 +3,6 @@ const mysql = require('mysql2');
 const bcrypt = require('bcrypt');
 const cors = require('cors');
 const { MercadoPagoConfig, Payment } = require('mercadopago');
-const { Rcon } = require('rcon-client'); // <-- NOSSO MOTOR RCON AQUI!
 
 // --- NOVAS BIBLIOTECAS PARA E-MAIL ---
 const nodemailer = require('nodemailer');
@@ -14,7 +13,8 @@ const client = new MercadoPagoConfig({ accessToken: process.env.MP_ACCESS_TOKEN 
 const payment = new Payment(client);
 
 const app = express();
-app.use(express.json());
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
 // Liberta o acesso para o seu site do GitHub
 app.use(cors({
@@ -53,10 +53,19 @@ db.connect(err => {
         if (err) console.error("Erro ao verificar/criar tabela:", err);
         else {
             console.log("Estrutura base verificada!");
-            // MÁGICA: Adiciona a coluna 'lojas' se ela ainda não existir
-            db.query("ALTER TABLE usuarios ADD COLUMN lojas LONGTEXT", (altErr) => {
-                if (altErr && altErr.code !== 'ER_DUP_FIELDNAME') console.error("Erro ao adicionar coluna lojas:", altErr);
-                else console.log("Pronto para guardar lojas na nuvem!");
+
+            db.query("ALTER TABLE usuarios ADD COLUMN lojas LONGTEXT", (err) => {
+                // Se a coluna já existir, o Aiven avisa. Então nós usamos o MODIFY para expandir!
+                if (err && err.code === 'ER_DUP_FIELDNAME') {
+                    db.query("ALTER TABLE usuarios MODIFY lojas LONGTEXT", (err2) => {
+                        if (err2) console.error("Erro ao expandir para LONGTEXT:", err2);
+                        else console.log("Banco de dados expandido para LONGTEXT com sucesso!");
+                    });
+                } else if (err) {
+                    console.error("Erro ao adicionar coluna lojas:", err);
+                } else {
+                    console.log("Coluna 'lojas' criada como LONGTEXT com sucesso!");
+                }
             });
         }
     });
@@ -84,50 +93,64 @@ db.connect(err => {
 });
 
 // =======================================================
-// MOTOR DE ENTREGA RCON (PROTECH LAB)
+// MOTOR DE ENTREGA VIA HTTP/REST (PROTECH LAB)
 // =======================================================
-async function executarComandosRcon(serverIp, serverPort, rconPassword, comandos) {
+async function executarComandosViaHttp(serverIp, serverPort, protechKey, comandos) {
     try {
-        console.log(`[ProTech RCON] Conectando ao servidor ${serverIp}:${serverPort}...`);
+        console.log(`[ProTech API] Iniciando envio HTTP para ${serverIp}:${serverPort}...`);
         
-        const rcon = await Rcon.connect({
-            host: serverIp,
-            port: parseInt(serverPort),
-            password: rconPassword,
-            timeout: 5000 // Desiste após 5 segundos se o servidor do cliente estiver offline
-        });
+        // A porta padrão para o servidor FiveM escutar HTTP é a mesma do jogo (30120)
+        // O Pinggy vai redirecionar certinho.
+        const url = `http://${serverIp}:${serverPort}/protech_connector/delivery`;
 
-        console.log(`[ProTech RCON] Sucesso! Autenticado no servidor do cliente.`);
-
-        // Dispara todos os comandos (Ex: se ele comprou 2 carros e 1 VIP)
         for (let cmd of comandos) {
-            console.log(`[ProTech RCON] Disparando: /${cmd}`);
-            const resposta = await rcon.send(cmd);
-            console.log(`[ProTech RCON] Resposta in-game: ${resposta}`);
+            console.log(`[ProTech API] Disparando comando: /${cmd}`);
+            
+            const resposta = await fetch(url, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${protechKey}` // Segurança!
+                },
+                body: JSON.stringify({ command: cmd })
+            });
+
+            if (!resposta.ok) {
+                console.error(`[ProTech API ERRO] O servidor retornou status: ${resposta.status}`);
+                return false;
+            }
+            
+            const data = await resposta.json();
+            console.log(`[ProTech API] Resposta in-game:`, data);
+            
+            // Pausa de 500ms entre comandos
+            await new Promise(r => setTimeout(r, 500)); 
         }
 
-        await rcon.end();
         return true;
     } catch (error) {
-        console.error(`[ProTech RCON ERRO] Falha na entrega:`, error.message);
+        console.error(`[ProTech API ERRO] Falha na entrega HTTP:`, error.message);
         return false;
     }
 }
 
-// ROTA PARA O SITE DISPARAR A ENTREGA APÓS O PIX
+// =======================================================
+// ROTA PARA O SITE DISPARAR A ENTREGA 
+// =======================================================
 app.post('/delivery', async (req, res) => {
-    const { ip, port, password, commands } = req.body;
+    // Note que agora pedimos o "token", e não "password"
+    const { ip, port, token, commands } = req.body;
     
-    if (!ip || !port || !password || !commands || commands.length === 0) {
+    if (!ip || !port || !token || !commands || commands.length === 0) {
         return res.status(400).json({ success: false, message: "Dados de servidor ou comandos ausentes." });
     }
 
-    const sucesso = await executarComandosRcon(ip, port, password, commands);
+    const sucesso = await executarComandosViaHttp(ip, port, token, commands);
     
     if (sucesso) {
         res.json({ success: true, message: "Itens entregues no jogo com sucesso!" });
     } else {
-        res.status(500).json({ success: false, message: "Servidor offline ou dados RCON incorretos." });
+        res.status(500).json({ success: false, message: "Servidor offline ou dados API incorretos." });
     }
 });
 // =======================================================
@@ -448,26 +471,68 @@ app.post('/sync-stores', (req, res) => {
 app.get('/api/store/:slug', (req, res) => {
     const slug = req.params.slug;
     
-    // Procura em todas as lojas de todos os usuários
     db.query("SELECT lojas FROM usuarios", (err, results) => {
         if (err) return res.status(500).json({ success: false, message: "Erro no banco." });
 
         for (let row of results) {
             if (row.lojas) {
-                const lojasDoUsuario = JSON.parse(row.lojas);
-                const lojaEncontrada = lojasDoUsuario.find(s => s.slug === slug);
-                
-                if (lojaEncontrada) {
-                    return res.json({ success: true, store: lojaEncontrada });
+                try {
+                    // MÁGICA: Tenta ler o JSON. Se estiver quebrado, ele pula e continua procurando!
+                    const lojasDoUsuario = JSON.parse(row.lojas);
+                    const lojaEncontrada = lojasDoUsuario.find(s => s.slug === slug);
+                    
+                    if (lojaEncontrada) {
+                        return res.json({ success: true, store: lojaEncontrada });
+                    }
+                } catch (e) {
+                    // Loga o erro mas não deixa o servidor travar ou retornar vazio
+                    console.error("Detectado JSON corrompido, pulando para a próxima linha...");
+                    continue; 
                 }
             }
         }
         
-        // Se o loop acabar e não achar nenhuma loja com esse link:
         res.status(404).json({ success: false, message: "Loja não encontrada" });
     });
 });
 
+// ========================================================
+// ROTA: PROCESSAR CARTÃO DE CRÉDITO VIA STRIPE
+// ========================================================
+app.post('/create-stripe-charge', async (req, res) => {
+    const { token, valor, email, stripeSecretKey } = req.body;
+
+    if (!stripeSecretKey) {
+        return res.status(400).json({ success: false, message: "Chave secreta da Stripe ausente." });
+    }
+
+    try {
+        // Inicializa a Stripe usando a chave secreta específica desta loja
+        const stripeInstance = require('stripe')(stripeSecretKey);
+
+        // Cria a cobrança na API da Stripe
+        const charge = await stripeInstance.charges.create({
+            amount: Math.round(Number(valor) * 100), // A Stripe lê o valor em centavos (ex: R$ 60,00 vira 6000)
+            currency: 'brl',
+            source: token,
+            description: `Compra na Loja - ${email}`,
+            receipt_email: email,
+        });
+
+        // Devolve o sucesso e o ID da transação para o Front-end liberar o RCON
+        res.json({
+            success: true,
+            chargeId: charge.id
+        });
+
+    } catch (error) {
+        console.error("Erro ao processar Stripe:", error.message);
+        res.status(400).json({
+            success: false,
+            message: error.message
+        });
+    }
+});
 
 const PORT = process.env.PORT || 10000; 
 
