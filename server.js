@@ -496,6 +496,43 @@ app.get('/api/store/:slug', (req, res) => {
     });
 });
 
+// ========================================================
+// ROTA: PROCESSAR CARTÃO DE CRÉDITO VIA STRIPE
+// ========================================================
+app.post('/create-stripe-charge', async (req, res) => {
+    const { token, valor, email, stripeSecretKey } = req.body;
+
+    if (!stripeSecretKey) {
+        return res.status(400).json({ success: false, message: "Chave secreta da Stripe ausente." });
+    }
+
+    try {
+        // Inicializa a Stripe usando a chave secreta específica desta loja
+        const stripeInstance = require('stripe')(stripeSecretKey);
+
+        // Cria a cobrança na API da Stripe
+        const charge = await stripeInstance.charges.create({
+            amount: Math.round(Number(valor) * 100), // A Stripe lê o valor em centavos (ex: R$ 60,00 vira 6000)
+            currency: 'brl',
+            source: token,
+            description: `Compra na Loja - ${email}`,
+            receipt_email: email,
+        });
+
+        // Devolve o sucesso e o ID da transação para o Front-end liberar o RCON
+        res.json({
+            success: true,
+            chargeId: charge.id
+        });
+
+    } catch (error) {
+        console.error("Erro ao processar Stripe:", error.message);
+        res.status(400).json({
+            success: false,
+            message: error.message
+        });
+    }
+});
 
 const PORT = process.env.PORT || 10000; 
 
