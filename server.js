@@ -534,6 +534,64 @@ app.post('/create-stripe-charge', async (req, res) => {
     }
 });
 
+// ========================================================
+// ROTA: GERAR PIX VIA STRIPE
+// ========================================================
+app.post('/create-stripe-pix', async (req, res) => {
+    const { valor, email, stripeSecretKey, cliente } = req.body;
+
+    if (!stripeSecretKey) {
+        return res.status(400).json({ success: false, message: "Chave secreta da Stripe ausente." });
+    }
+
+    try {
+        const stripeInstance = require('stripe')(stripeSecretKey);
+
+        // Na Stripe, o PIX usa a API moderna de "PaymentIntents"
+        const paymentIntent = await stripeInstance.paymentIntents.create({
+            amount: Math.round(Number(valor) * 100), // Converte para centavos
+            currency: 'brl',
+            payment_method_types: ['pix'],
+            payment_method_data: {
+                type: 'pix'
+            },
+            confirm: true, // Já gera o código PIX na mesma hora
+            description: `Pedido na Loja - ${cliente.nome}`,
+            receipt_email: email,
+        });
+
+        const pixDetails = paymentIntent.next_action.pix_display_details;
+
+        res.json({
+            success: true,
+            payment_id: paymentIntent.id,
+            qr_code: pixDetails.pix_code, // O código Copia e Cola
+            qr_code_url: pixDetails.image_url_png // Imagem PNG do QR Code gerada pela Stripe
+        });
+
+    } catch (error) {
+        console.error("Erro ao processar Stripe PIX:", error.message);
+        res.status(400).json({ success: false, message: error.message });
+    }
+});
+
+// ========================================================
+// ROTA: CHECAR PAGAMENTO DO PIX STRIPE
+// ========================================================
+app.post('/check-stripe-pix', async (req, res) => {
+    const { paymentId, stripeSecretKey } = req.body;
+    
+    try {
+        const stripeInstance = require('stripe')(stripeSecretKey);
+        const intent = await stripeInstance.paymentIntents.retrieve(paymentId);
+        
+        // Se o status for "succeeded", o cliente pagou!
+        res.json({ approved: intent.status === 'succeeded' });
+    } catch (error) {
+        res.json({ approved: false });
+    }
+});
+
 const PORT = process.env.PORT || 10000; 
 
 app.listen(PORT, '0.0.0.0', () => {
