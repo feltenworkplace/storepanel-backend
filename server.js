@@ -592,6 +592,89 @@ app.post('/check-stripe-pix', async (req, res) => {
     }
 });
 
+// ========================================================
+// ROTA: GERAR PIX VIA ASAAS (PRODUÇÃO)
+// ========================================================
+app.post('/create-asaas-pix', async (req, res) => {
+    const { valor, cliente, asaasToken } = req.body;
+
+    if (!asaasToken) return res.status(400).json({ success: false, message: "Token do Asaas ausente." });
+
+    try {
+        const headers = {
+            'access_token': asaasToken,
+            'Content-Type': 'application/json'
+        };
+
+        // 1. Criar o Cliente no Asaas invisivelmente
+        const customerRes = await fetch('https://api.asaas.com/v3/customers', {
+            method: 'POST',
+            headers,
+            body: JSON.stringify({
+                name: cliente.nome,
+                cpfCnpj: cliente.cpf,
+                email: cliente.email
+            })
+        });
+        const customerData = await customerRes.json();
+        
+        if (!customerData.id) throw new Error(customerData.errors?.[0]?.description || "Erro ao criar cliente no Asaas");
+
+        // 2. Criar a Cobrança PIX
+        const paymentRes = await fetch('https://api.asaas.com/v3/payments', {
+            method: 'POST',
+            headers,
+            body: JSON.stringify({
+                customer: customerData.id,
+                billingType: 'PIX',
+                value: valor,
+                dueDate: new Date(Date.now() + 86400000).toISOString().split('T')[0], // Vence amanhã
+                description: `Pedido na Loja - ${cliente.nome}`
+            })
+        });
+        const paymentData = await paymentRes.json();
+        
+        if (!paymentData.id) throw new Error("Erro ao criar cobrança PIX no Asaas");
+
+        // 3. Pegar a Imagem do QR Code e a chave Copia e Cola
+        const qrCodeRes = await fetch(`https://api.asaas.com/v3/payments/${paymentData.id}/pixQrCode`, {
+            method: 'GET',
+            headers
+        });
+        const qrCodeData = await qrCodeRes.json();
+
+        res.json({
+            success: true,
+            payment_id: paymentData.id,
+            qr_code: qrCodeData.payload, // O código Copia e Cola
+            qr_code_base64: qrCodeData.encodedImage // A Imagem para a tela
+        });
+
+    } catch (error) {
+        console.error("Erro Asaas PIX:", error.message);
+        res.status(400).json({ success: false, message: error.message });
+    }
+});
+
+// ========================================================
+// ROTA: CHECAR PAGAMENTO DO PIX ASAAS
+// ========================================================
+app.post('/check-asaas-pix', async (req, res) => {
+    const { paymentId, asaasToken } = req.body;
+    try {
+        const checkRes = await fetch(`https://api.asaas.com/v3/payments/${paymentId}`, {
+            method: 'GET',
+            headers: { 'access_token': asaasToken }
+        });
+        const checkData = await checkRes.json();
+        
+        // "RECEIVED" ou "CONFIRMED" significa dinheiro na conta!
+        res.json({ approved: checkData.status === 'RECEIVED' || checkData.status === 'CONFIRMED' });
+    } catch (error) {
+        res.json({ approved: false });
+    }
+});
+
 const PORT = process.env.PORT || 10000; 
 
 app.listen(PORT, '0.0.0.0', () => {
