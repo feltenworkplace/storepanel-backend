@@ -593,7 +593,7 @@ app.post('/check-stripe-pix', async (req, res) => {
 });
 
 // ========================================================
-// ROTA: GERAR PIX VIA ASAAS (PRODUÇÃO)
+// ROTA: GERAR PIX VIA ASAAS (SANDBOX CONFIGURADO)
 // ========================================================
 app.post('/create-asaas-pix', async (req, res) => {
     const { valor, cliente, asaasToken } = req.body;
@@ -606,8 +606,8 @@ app.post('/create-asaas-pix', async (req, res) => {
             'Content-Type': 'application/json'
         };
 
-        // 1. Criar o Cliente no Asaas invisivelmente
-        const customerRes = await fetch('https://api.asaas.com/v3/customers', {
+        // 1. Criar o Cliente no Sandbox
+        const customerRes = await fetch('https://sandbox.asaas.com/api/v3/customers', {
             method: 'POST',
             headers,
             body: JSON.stringify({
@@ -620,15 +620,15 @@ app.post('/create-asaas-pix', async (req, res) => {
         
         if (!customerData.id) throw new Error(customerData.errors?.[0]?.description || "Erro ao criar cliente no Asaas");
 
-        // 2. Criar a Cobrança PIX
-        const paymentRes = await fetch('https://api.asaas.com/v3/payments', {
+        // 2. Criar a Cobrança PIX no Sandbox
+        const paymentRes = await fetch('https://sandbox.asaas.com/api/v3/payments', {
             method: 'POST',
             headers,
             body: JSON.stringify({
                 customer: customerData.id,
                 billingType: 'PIX',
                 value: valor,
-                dueDate: new Date(Date.now() + 86400000).toISOString().split('T')[0], // Vence amanhã
+                dueDate: new Date(Date.now() + 86400000).toISOString().split('T')[0],
                 description: `Pedido na Loja - ${cliente.nome}`
             })
         });
@@ -636,8 +636,8 @@ app.post('/create-asaas-pix', async (req, res) => {
         
         if (!paymentData.id) throw new Error("Erro ao criar cobrança PIX no Asaas");
 
-        // 3. Pegar a Imagem do QR Code e a chave Copia e Cola
-        const qrCodeRes = await fetch(`https://api.asaas.com/v3/payments/${paymentData.id}/pixQrCode`, {
+        // 3. Pegar a Imagem do QR Code no Sandbox
+        const qrCodeRes = await fetch(`https://sandbox.asaas.com/api/v3/payments/${paymentData.id}/pixQrCode`, {
             method: 'GET',
             headers
         });
@@ -646,8 +646,8 @@ app.post('/create-asaas-pix', async (req, res) => {
         res.json({
             success: true,
             payment_id: paymentData.id,
-            qr_code: qrCodeData.payload, // O código Copia e Cola
-            qr_code_base64: qrCodeData.encodedImage // A Imagem para a tela
+            qr_code: qrCodeData.payload, 
+            qr_code_base64: qrCodeData.encodedImage 
         });
 
     } catch (error) {
@@ -662,7 +662,7 @@ app.post('/create-asaas-pix', async (req, res) => {
 app.post('/check-asaas-pix', async (req, res) => {
     const { paymentId, asaasToken } = req.body;
     try {
-        const checkRes = await fetch(`https://api.asaas.com/v3/payments/${paymentId}`, {
+        const checkRes = await fetch(`https://sandbox.asaas.com/api/v3/payments/${paymentId}`, {
             method: 'GET',
             headers: { 'access_token': asaasToken }
         });
